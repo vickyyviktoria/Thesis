@@ -1,5 +1,4 @@
 survey <- read.csv("survey.csv")
-names(survey)
 
 install.packages("car")
 install.packages("writexl")
@@ -25,6 +24,8 @@ install.packages("MESS")
 install.packages("gmodels")
 install.packages("modeest")
 install.packages("tibble")
+install.packages("broom")
+
 
 library(car)
 library(writexl)
@@ -50,6 +51,7 @@ library(MESS)
 library(gmodels)
 library(modeest)
 library(tibble)
+library(broom)
 
 ################## data cleaning
 ########### removing columns 
@@ -220,7 +222,6 @@ motivations <- tibble::rowid_to_column(motivations, "index")
 
 
 
-
 ############################### ACADEMIC DISHONESTY
 
 ac_dishonesty <- survey %>% dplyr::select(starts_with("Q12_"), starts_with("Q13_"))
@@ -260,6 +261,7 @@ ac_dishonesty <- cbind(ac_dishonesty, result)
 
 ac_dishonesty <- cbind(ac_dishonesty, ac_results_num)
 
+survey <- cbind(survey, ad_score)
 
 describe(survey$result)
 describe(ac_dishonesty$ac_results_num)
@@ -412,8 +414,7 @@ t.test(survey$Q2, survey$uses_means)
 
 cor.test(survey$Q2, survey$uses_means)
 
-#### very weak positive linear relationship
-
+#### no correlation
 
 ############ Gender and Usage
 
@@ -436,13 +437,13 @@ cor_test <- cor.test(survey$Q4, survey$uses_means)
 #### weak negative correlation
 
 
-ggplot(data.frame(survey$uses_means, survey$Q4), aes(x = survey$uses_means, y = survey$Q4)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE, color = "blue") +
-  labs(title = "Scatter Plot with Regression Line",
-       subtitle = paste("Correlation:", round(cor_test$estimate, 2), 
-                        "p-value:", round(cor_test$p.value, 4)))
-
+ggplot(data = survey, mapping = aes(x = factor(Q4), y = uses_means)) + 
+  geom_boxplot(alpha = 0.6) + 
+  geom_jitter(color = "#9400D3", size = 0.4, width = 0.2, alpha = 0.6) +
+  labs(title = "Boxplots of Uses by Level of Education Categories",
+       x = "Level of Education",
+       y = "Uses") +
+  theme_minimal()
 
 ########### Start of Study and Usage
 
@@ -471,7 +472,7 @@ t.test(survey$Q3, survey$dishonest_uses_means)
 
 cor.test(survey$Q3, survey$dishonest_uses_means)
 
-#### very weak negative correlation
+#### no correlation
 
 
 ########### Academic Degree and Dishonest Usage
@@ -489,7 +490,7 @@ t.test(survey$Q5, survey$dishonest_uses_means)
 
 cor.test(survey$Q5, survey$dishonest_uses_means)
 
-#### very weak negative correlation
+#### no correlation
 
 
 
@@ -504,6 +505,13 @@ cor.test(survey$ac_results_num, survey$uses_means)
 
 #### weak positive correlation
 
+ggplot(data = survey, mapping = aes(x = factor(ac_results_num), y = uses_means)) + 
+  geom_boxplot(alpha = 0.6) + 
+  geom_jitter(color = "#9400D3", size = 0.4, width = 0.2, alpha = 0.6) +
+  labs(title = "Boxplots of Uses by Academic Dishonesty",
+       x = "Academic Dishonesty",
+       y = "Uses") +
+  theme_minimal()
 
 ############ Academic Dishonesty and Dishonest Usage
 
@@ -511,21 +519,16 @@ t.test(survey$ac_results_num, survey$dishonest_uses_means)
 
 #### p-value < 0.05
 
-cor3 <- cor.test(survey$ac_results_num, survey$dishonest_uses_means)
+cor.test(survey$ac_results_num, survey$dishonest_uses_means)
 
-#### moderate positive correlation
+#### weak positive correlation
 
-
-summary_data <- survey %>%
-  dplyr :: group_by(ac_results_num) %>%
-  summarise(mean_uses_means = mean(uses_means, na.rm = TRUE))
-
-ggplot(summary_data, aes(x = as.factor(ac_results_num), y = mean_uses_means, fill = as.factor(ac_results_num))) +
-  geom_bar(stat = "identity") +
-  labs(title = "Mean Uses of GenAI by Academic Dishonesty",
-       x = "Academic Dishonesty (ac_results_num)",
-       y = "Mean Uses of GenAI (uses_means)") +
-  scale_fill_manual(values = c("#BA55D3", "#9370DB"), name="Academic Dishonesty") +
+ggplot(data = survey, mapping = aes(x = factor(ac_results_num), y = dishonest_uses_means)) + 
+  geom_boxplot(alpha = 0.6) + 
+  geom_jitter(color = "#9400D3", size = 0.4, width = 0.2, alpha = 0.6) +
+  labs(title = "Boxplots of Dishonest Uses by Academic Dishonesty",
+       x = "Academic Dishonesty",
+       y = "Dishonest Uses") +
   theme_minimal()
 
 
@@ -572,20 +575,7 @@ cor.test(survey$approach_num, survey$dishonest_uses_means)
 
 ########################################### MULTIPLE REGRESSION ANALYSIS
 
-lm2 <- lm(cbind(uses_means, dishonest_uses_means) ~ ac_results_num + approach_num, data = survey)
-
-summary(lm2)
-
-
-######################### summary of standardized regression coefficients from regression model
-
-summary(lm.beta(lm2))
-
-
-
-
-########## one dependent variable
-
+############ uses
 
 lm3 <- lm(uses_means  ~ ac_results_num + approach_num, data = survey)
 
@@ -593,24 +583,22 @@ avPlots(lm3)
 
 summary(lm.beta(lm3))
 
-#### p-value for model = 0.026
-#### Intercept and approaches are significant, academic dishonesty is not
-#### Estimate = change for one unit
-#### if ad & approaches are 0, Intercept is expected to be 2.31952 = significant
-#### approaches = each one unit increase in usage (higher usage) = lesser degree of approach (closer to surface)
-#### the model explains 7.26% of the variance in usage, indicating a poor fit
 
 
+tidy_model3 <- tidy(lm3)
 
-interaction.plot(survey$approach_num, survey$ac_results_num,  survey$uses_means,
-                 xlab = "Approaches to Learning", ylab = "Mean Uses of AI",
-                 main = "Interaction Plot of AI Usage by Approach to Learning and Academic Dishonesty",
-                 col = c("orange", "red"),
-                 trace.label = "Academic Dishonesty",
-                 legend = TRUE)
+ggplot(tidy_model3, aes(x = term, y = estimate, fill = term)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = estimate - std.error * 1.96, ymax = estimate + std.error * 1.96), 
+                width = 0.2, position = position_dodge(0.9)) +
+  labs(title = "Regression Coefficients",
+       x = "Variables",
+       y = "Coefficient Estimate") +
+  theme_minimal() +
+  theme(legend.position = "none")
 
 
-
+################ dishonest uses
 
 lm4 <- lm(dishonest_uses_means  ~ ac_results_num + approach_num, data = survey)
 
@@ -618,12 +606,17 @@ avPlots(lm4)
 
 summary(lm.beta(lm4))
 
-interaction.plot(survey$approach_num, survey$ac_results_num,  survey$dishonest_uses_means,
-                 xlab = "Approaches to Learning", ylab = "Mean Dishonest Uses of AI",
-                 main = "Interaction Plot of Dishonest AI Usage by Approach to Learning and Academic Dishonesty",
-                 col = c("purple", "#FF1493"),
-                 trace.label = "Academic Dishonesty",
-                 legend = TRUE)
+tidy_model4 <- tidy(lm4)
+
+ggplot(tidy_model4, aes(x = term, y = estimate, fill = term)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = estimate - std.error * 1.96, ymax = estimate + std.error * 1.96), 
+                width = 0.2, position = position_dodge(0.9)) +
+  labs(title = "Regression Coefficients",
+       x = "Variables",
+       y = "Coefficient Estimate") +
+  theme_minimal() +
+  theme(legend.position = "none")
 
 
 ########################### Moderated Multiple Regression Analysis
@@ -648,6 +641,13 @@ summary(model_uses)
 
 avPlots(model_uses, main = "Added-Variable Plots for Uses")
 
+ggplot(survey, aes(x = uses_means, y = as.factor(ac_results_num), color = Style_num)) +
+  geom_point(position = position_jitter(width = 0.1, height = 0), alpha = 0.6) +
+  geom_smooth(method = "lm", aes(group = Style_num), se = FALSE) +
+  labs(title = "Interaction between Academic Dishonesty and Learning Styles",
+       x = "Uses of GenAI",
+       y = "Academic Dishonesty") +
+  theme_minimal()
 
 
 ####################### DISHONEST USES
@@ -657,3 +657,11 @@ model_dishonest_uses <- lm(dishonest_uses_means ~ ac_results_num_c * Style_num_c
 summary(model_dishonest_uses)
 
 avPlots(model_dishonest_uses, main = "Added-Variable Plots for Dishonest Uses")
+
+ggplot(survey, aes(x = dishonest_uses_means, y = as.factor(ac_results_num), color = Style_num)) +
+  geom_point(position = position_jitter(width = 0.1, height = 0), alpha = 0.6) +
+  geom_smooth(method = "lm", aes(group = Style_num), se = FALSE) +
+  labs(title = "Interaction between Academic Dishonesty and Learning Styles",
+       x = "Dishonest Uses GenAI",
+       y = "Academic Dishonesty") +
+  theme_minimal()
